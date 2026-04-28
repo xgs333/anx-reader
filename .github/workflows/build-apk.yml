@@ -1,0 +1,35 @@
+name: Build APK Manually
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Flutter Pub Get
+        run: flutter pub get
+
+      - name: Build APK (Bypass Signing)
+        run: |
+          sed -i 's/signingConfig signingConfigs.release//g' android/app/build.gradle
+          flutter build apk --release
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: anx-reader-release
+          path: build/app/outputs/flutter-apk/app-release.apk
