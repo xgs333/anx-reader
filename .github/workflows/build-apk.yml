@@ -25,10 +25,11 @@ jobs:
 
       - name: Build APK (Bypass Signing)
         run: |
-          echo "keyAlias=androiddebugkey" > android/key.properties
-          echo "keyPassword=android" >> android/key.properties
-          echo "storePassword=android" >> android/key.properties
-          echo "storeFile=../debug.keystore" >> android/key.properties
+          keytool -genkey -v -keystore android/dummy.keystore -alias dummykey -keyalg RSA -keysize 2048 -validity 10000 -storepass dummy123 -keypass dummy123 -dname "CN=Dummy,O=Dummy,C=US"
+          echo "keyAlias=dummykey" > android/key.properties
+          echo "keyPassword=dummy123" >> android/key.properties
+          echo "storePassword=dummy123" >> android/key.properties
+          echo "storeFile=dummy.keystore" >> android/key.properties
           flutter build apk --release
 
       - name: Upload Artifact
