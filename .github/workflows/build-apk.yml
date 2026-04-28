@@ -25,7 +25,10 @@ jobs:
 
       - name: Build APK (Bypass Signing)
         run: |
-          sed -i 's/signingConfig signingConfigs.release//g' android/app/build.gradle
+          echo "keyAlias=androiddebugkey" > android/key.properties
+          echo "keyPassword=android" >> android/key.properties
+          echo "storePassword=android" >> android/key.properties
+          echo "storeFile=../debug.keystore" >> android/key.properties
           flutter build apk --release
 
       - name: Upload Artifact
