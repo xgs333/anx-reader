@@ -39,6 +39,10 @@ abstract class AiProvider with _$AiProvider {
     @Default(AiReasoningEffort.auto)
     AiReasoningEffort reasoningEffort, // OpenAI reasoning effort
     @Default(0) int keyIndex, // Current round-robin key index
+    double? temperature, // Model temperature (null = use default)
+    double? topP, // Model top_p (null = use default)
+    int? maxTokens, // Max output tokens (null = use default)
+    String? extraHeaders, // Custom headers as JSON string
     DateTime? createdAt, // Creation time
     DateTime? updatedAt, // Last update time
   }) = _AiProvider;

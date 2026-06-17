@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:anx_reader/config/shared_preference_provider.dart';
@@ -17,6 +18,10 @@ import 'package:langchain_core/chat_models.dart';
 import 'package:langchain_core/prompts.dart';
 
 final CancelableLangchainRunner _runner = CancelableLangchainRunner();
+
+/// The reasoning signature from the most recent AI stream response.
+/// Empty if no thinking blocks were present.
+String get lastReasoningSignature => _runner.lastReasoningSignature;
 
 // Global request timestamps list for RPM throttling
 final List<DateTime> _aiRequestTimestamps = [];
@@ -100,6 +105,10 @@ Stream<String> _generateStream({
             apiKey: apiKey,
             url: provider.url,
             reasoningEffort: provider.reasoningEffort,
+            temperature: provider.temperature,
+            topP: provider.topP,
+            maxTokens: provider.maxTokens,
+            headers: _parseExtraHeaders(provider.extraHeaders),
           );
 
           AnxLog.info(
@@ -165,6 +174,10 @@ Stream<String> _generateStream({
               apiKey: apiKey,
               url: provider.url,
               reasoningEffort: provider.reasoningEffort,
+              temperature: provider.temperature,
+              topP: provider.topP,
+              maxTokens: provider.maxTokens,
+              headers: _parseExtraHeaders(provider.extraHeaders),
             );
 
             AnxLog.info(
@@ -347,6 +360,7 @@ List<ChatMessage> _sanitizeMessagesForPrompt(List<ChatMessage> messages) {
         return AIChatMessage(
           content: content,
           reasoningContent: reasoningContent,
+          reasoningSignature: message.reasoningSignature,
           toolCalls: message.toolCalls,
         );
       }
@@ -372,4 +386,15 @@ String? _latestUserMessage(List<ChatMessage> messages) {
     }
   }
   return null;
+}
+
+Map<String, String> _parseExtraHeaders(String? raw) {
+  if (raw == null || raw.trim().isEmpty) return const {};
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is Map<String, dynamic>) {
+      return decoded.map((key, value) => MapEntry(key.toString(), value.toString()));
+    }
+  } catch (_) {}
+  return const {};
 }

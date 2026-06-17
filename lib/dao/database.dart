@@ -13,7 +13,7 @@ import 'package:path/path.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 // Current app database version
-const int currentDbVersion = 7;
+const int currentDbVersion = 11;
 
 const createBookSQL = '''
 CREATE TABLE tb_books (
@@ -94,6 +94,85 @@ CREATE TABLE tb_groups (
   create_time TEXT,
   update_time TEXT,
   FOREIGN KEY (parent_id) REFERENCES tb_groups(id)
+)
+''';
+
+const createBookAnalysisSQL = '''
+CREATE TABLE tb_book_analysis (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  book_id INTEGER NOT NULL,
+  analysis_text TEXT,
+  status TEXT DEFAULT 'pending',
+  progress TEXT,
+  created_at TEXT,
+  updated_at TEXT
+)
+''';
+
+const createBookFanficSQL = '''
+CREATE TABLE tb_book_fanfic (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  book_id INTEGER NOT NULL,
+  book_title TEXT,
+  outline TEXT,
+  content TEXT,
+  title TEXT,
+  created_at TEXT
+)
+''';
+
+const createTextEditSQL = '''
+CREATE TABLE tb_text_edit (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  book_id INTEGER NOT NULL,
+  chapter_href TEXT NOT NULL,
+  original_text TEXT NOT NULL,
+  edited_text TEXT NOT NULL,
+  created_at TEXT
+)
+''';
+
+const createChapterSummarySQL = '''
+CREATE TABLE tb_chapter_summary (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  book_id INTEGER NOT NULL,
+  chapter_href TEXT NOT NULL,
+  chapter_label TEXT,
+  summary TEXT,
+  created_at TEXT,
+  updated_at TEXT
+)
+''';
+
+const createChapterEmotionSQL = '''
+CREATE TABLE tb_chapter_emotion (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  book_id INTEGER NOT NULL,
+  chapter_href TEXT NOT NULL,
+  chapter_label TEXT,
+  emotion_json TEXT,
+  created_at TEXT,
+  updated_at TEXT
+)
+''';
+
+const createBookChatSQL = '''
+CREATE TABLE tb_book_chat (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  book_id INTEGER NOT NULL,
+  role TEXT NOT NULL,
+  content TEXT NOT NULL,
+  created_at TEXT
+)
+''';
+
+const createCharacterRelationSQL = '''
+CREATE TABLE tb_character_relation (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  book_id INTEGER NOT NULL,
+  graph_json TEXT,
+  created_at TEXT,
+  updated_at TEXT
 )
 ''';
 
@@ -425,6 +504,51 @@ class DBHelper {
             VALUES (?, '...', 0, datetime('now'), datetime('now'))
           ''', [groupId]);
         }
+        continue case7;
+      case7:
+      case 7:
+        // create book analysis and fanfic tables
+        await db.execute(createBookAnalysisSQL);
+        await db.execute(createBookFanficSQL);
+        continue case8;
+      case8:
+      case 8:
+        // create text edit table
+        await db.execute(createTextEditSQL);
+        continue case9;
+      case9:
+      case 9:
+        // add indices on book_id columns for performance
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_book_analysis_book_id ON tb_book_analysis(book_id)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_book_fanfic_book_id ON tb_book_fanfic(book_id)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_text_edit_book_id ON tb_text_edit(book_id)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_text_edit_book_chapter ON tb_text_edit(book_id, chapter_href)');
+        continue case10;
+      case10:
+      case 10:
+        // v11: AI feature expansion — chapter summaries, emotions, book chat, character relations
+        await db.execute(createChapterSummarySQL);
+        await db.execute(createChapterEmotionSQL);
+        await db.execute(createBookChatSQL);
+        await db.execute(createCharacterRelationSQL);
+        // add parent_fanfic_id and style_template columns to tb_book_fanfic
+        await db.execute(
+            'ALTER TABLE tb_book_fanfic ADD COLUMN parent_fanfic_id INTEGER');
+        await db.execute(
+            'ALTER TABLE tb_book_fanfic ADD COLUMN style_template TEXT');
+        // add indices for new tables
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_chapter_summary_book ON tb_chapter_summary(book_id)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_chapter_emotion_book ON tb_chapter_emotion(book_id)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_book_chat_book ON tb_book_chat(book_id)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_character_relation_book ON tb_character_relation(book_id)');
     }
 
     if (oldVersion != 0 && Prefs().webdavStatus) {

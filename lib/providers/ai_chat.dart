@@ -107,6 +107,25 @@ class AiChat extends _$AiChat {
 
         state = AsyncData(updatedMessagesWithResponse);
       }
+
+      // Preserve reasoning signature from the API response for history
+      final sig = lastReasoningSignature;
+      if (sig.isNotEmpty && state.value != null) {
+        final msgs = List<ChatMessage>.from(state.value!);
+        final lastIdx = msgs.length - 1;
+        if (msgs[lastIdx] is AIChatMessage) {
+          final last = msgs[lastIdx] as AIChatMessage;
+          if (last.reasoningSignature.isEmpty) {
+            msgs[lastIdx] = assistantMessageFromDisplayContent(
+              assistantResponse,
+              toolCalls: last.toolCalls,
+              reasoningSignature: sig,
+            );
+            state = AsyncData(msgs);
+          }
+        }
+      }
+
       final completedEntry = draftEntry.copyWith(
         messages: List<ChatMessage>.from(state.value ?? updatedMessages),
         updatedAt: DateTime.now().millisecondsSinceEpoch,

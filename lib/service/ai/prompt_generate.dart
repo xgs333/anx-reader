@@ -142,6 +142,96 @@ PromptTemplatePayload generatePromptFullTextTranslate(
   );
 }
 
+PromptTemplatePayload generatePromptBookAnalysisChapter(
+  String bookTitle,
+  String chapterLabel,
+  int chapterIndex,
+  int totalChapters,
+  String chapterContent,
+) {
+  final prompt = Prefs().getAiPrompt(AiPrompts.bookAnalysisChapter);
+  final normalized = _normalizePrompt(prompt);
+  final template = ChatPromptTemplate.fromPromptMessages([
+    HumanChatMessagePromptTemplate.fromTemplate(normalized),
+  ]);
+  return PromptTemplatePayload(
+    template: template,
+    variables: {
+      'book_title': bookTitle,
+      'chapter_label': chapterLabel,
+      'chapter_index': chapterIndex.toString(),
+      'total_chapters': totalChapters.toString(),
+      'chapter_content': chapterContent,
+    },
+    identifier: AiPrompts.bookAnalysisChapter,
+  );
+}
+
+PromptTemplatePayload generatePromptBookAnalysisBatchMerge(
+  String bookTitle,
+  int batchCount,
+  String batchSummaries,
+) {
+  final prompt = Prefs().getAiPrompt(AiPrompts.bookAnalysisBatchMerge);
+  final normalized = _normalizePrompt(prompt);
+  final template = ChatPromptTemplate.fromPromptMessages([
+    HumanChatMessagePromptTemplate.fromTemplate(normalized),
+  ]);
+  return PromptTemplatePayload(
+    template: template,
+    variables: {
+      'book_title': bookTitle,
+      'batch_count': batchCount.toString(),
+      'batch_summaries': batchSummaries,
+    },
+    identifier: AiPrompts.bookAnalysisBatchMerge,
+  );
+}
+
+PromptTemplatePayload generatePromptBookAnalysisFinalSynthesis(
+  String bookTitle,
+  String bookAuthor,
+  String batchSummaries,
+  String chapterSamples,
+) {
+  final prompt = Prefs().getAiPrompt(AiPrompts.bookAnalysisFinalSynthesis);
+  final normalized = _normalizePrompt(prompt);
+  final template = ChatPromptTemplate.fromPromptMessages([
+    HumanChatMessagePromptTemplate.fromTemplate(normalized),
+  ]);
+  return PromptTemplatePayload(
+    template: template,
+    variables: {
+      'book_title': bookTitle,
+      'book_author': bookAuthor,
+      'batch_summaries': batchSummaries,
+      'chapter_samples': chapterSamples,
+    },
+    identifier: AiPrompts.bookAnalysisFinalSynthesis,
+  );
+}
+
+PromptTemplatePayload generatePromptBookAnalysisFanfic(
+  String bookTitle,
+  String analysisJson,
+  String outline,
+) {
+  final prompt = Prefs().getAiPrompt(AiPrompts.bookAnalysisFanfic);
+  final normalized = _normalizePrompt(prompt);
+  final template = ChatPromptTemplate.fromPromptMessages([
+    HumanChatMessagePromptTemplate.fromTemplate(normalized),
+  ]);
+  return PromptTemplatePayload(
+    template: template,
+    variables: {
+      'book_title': bookTitle,
+      'analysis_json': analysisJson,
+      'outline': outline,
+    },
+    identifier: AiPrompts.bookAnalysisFanfic,
+  );
+}
+
 String _normalizePrompt(String template) {
   return template.replaceAll('{{', '{').replaceAll('}}', '}');
 }

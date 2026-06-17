@@ -661,6 +661,15 @@ class Prefs extends ChangeNotifier {
     return prefs.getInt('aiRpm') ?? 0;
   }
 
+  /// Number of concurrent chapter analysis requests for book analysis. Default 5.
+  int get bookAnalysisConcurrency =>
+      prefs.getInt('bookAnalysisConcurrency') ?? 5;
+
+  set bookAnalysisConcurrency(int value) {
+    prefs.setInt('bookAnalysisConcurrency', value.clamp(1, 20));
+    notifyListeners();
+  }
+
   // set convertChineseMode(ConvertChineseMode mode) {
   //   prefs.setString('convertChineseMode', mode.name);
   //   notifyListeners();

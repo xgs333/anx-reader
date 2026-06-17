@@ -10,6 +10,7 @@ import 'package:anx_reader/widgets/common/anx_button.dart';
 import 'package:anx_reader/widgets/common/anx_segmented_button.dart';
 import 'package:anx_reader/widgets/common/container/filled_container.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:uuid/uuid.dart';
@@ -31,9 +32,13 @@ class _AiProviderDetailPageState extends ConsumerState<AiProviderDetailPage> {
   late TextEditingController _nameController;
   late TextEditingController _urlController;
   late TextEditingController _modelController;
+  late TextEditingController _maxTokensController;
+  late TextEditingController _extraHeadersController;
 
   AiProtocol _selectedProtocol = AiProtocol.openai;
   AiReasoningEffort _reasoningEffort = AiReasoningEffort.auto;
+  double? _temperature;
+  double? _topP;
   List<AiApiKey> _apiKeys = [];
   bool _isModified = false;
   bool _isFetchingModels = false;
@@ -52,13 +57,21 @@ class _AiProviderDetailPageState extends ConsumerState<AiProviderDetailPage> {
     _nameController = TextEditingController(text: provider?.title ?? '');
     _urlController = TextEditingController(text: provider?.url ?? '');
     _modelController = TextEditingController(text: provider?.model ?? '');
+    _maxTokensController = TextEditingController(
+        text: provider?.maxTokens?.toString() ?? '');
+    _extraHeadersController = TextEditingController(
+        text: provider?.extraHeaders ?? '');
     _selectedProtocol = provider?.protocol ?? AiProtocol.openai;
     _reasoningEffort = provider?.reasoningEffort ?? AiReasoningEffort.auto;
+    _temperature = provider?.temperature;
+    _topP = provider?.topP;
     _apiKeys = provider?.apiKeys.toList() ?? [];
 
     _nameController.addListener(() => setState(() => _isModified = true));
     _urlController.addListener(() => setState(() => _isModified = true));
     _modelController.addListener(() => setState(() => _isModified = true));
+    _maxTokensController.addListener(() => setState(() => _isModified = true));
+    _extraHeadersController.addListener(() => setState(() => _isModified = true));
   }
 
   @override
@@ -66,6 +79,8 @@ class _AiProviderDetailPageState extends ConsumerState<AiProviderDetailPage> {
     _nameController.dispose();
     _urlController.dispose();
     _modelController.dispose();
+    _maxTokensController.dispose();
+    _extraHeadersController.dispose();
     super.dispose();
   }
 
@@ -255,12 +270,6 @@ class _AiProviderDetailPageState extends ConsumerState<AiProviderDetailPage> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final accent = colorScheme.secondary;
-    final summary = switch (_reasoningEffort) {
-      AiReasoningEffort.auto => l10n.settingsAiProviderReasoningEffortAuto,
-      AiReasoningEffort.low => l10n.settingsAiProviderReasoningEffortLow,
-      AiReasoningEffort.medium => l10n.settingsAiProviderReasoningEffortMedium,
-      AiReasoningEffort.high => l10n.settingsAiProviderReasoningEffortHigh,
-    };
 
     return FilledContainer(
       child: ExpansionTile(
@@ -302,61 +311,190 @@ class _AiProviderDetailPageState extends ConsumerState<AiProviderDetailPage> {
           ],
         ),
         children: [
-          DropdownButtonFormField<AiReasoningEffort>(
-            initialValue: _reasoningEffort,
+          // Reasoning Effort — only for OpenAI-compatible protocol
+          if (_selectedProtocol == AiProtocol.openai) ...[
+            DropdownButtonFormField<AiReasoningEffort>(
+              value: _reasoningEffort,
+              decoration: InputDecoration(
+                labelText: l10n.settingsAiProviderReasoningEffort,
+                border: const OutlineInputBorder(),
+              ),
+              items: [
+                DropdownMenuItem(
+                  value: AiReasoningEffort.auto,
+                  child: Text(l10n.settingsAiProviderReasoningEffortAuto),
+                ),
+                DropdownMenuItem(
+                  value: AiReasoningEffort.low,
+                  child: Text(l10n.settingsAiProviderReasoningEffortLow),
+                ),
+                DropdownMenuItem(
+                  value: AiReasoningEffort.medium,
+                  child: Text(l10n.settingsAiProviderReasoningEffortMedium),
+                ),
+                DropdownMenuItem(
+                  value: AiReasoningEffort.high,
+                  child: Text(l10n.settingsAiProviderReasoningEffortHigh),
+                ),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() {
+                  _reasoningEffort = value;
+                  _isModified = true;
+                });
+              },
+            ),
+            const SizedBox(height: 10),
+            _buildInfoRow(l10n.settingsAiProviderReasoningEffortHelp),
+            const SizedBox(height: 16),
+          ],
+
+          // Temperature
+          _buildSliderField(
+            label: l10n.settingsAiProviderTemperature,
+            value: _temperature,
+            min: 0.0,
+            max: 2.0,
+            divisions: 20,
+            defaultValue: 1.0,
+            onChanged: (v) => setState(() {
+              _temperature = v;
+              _isModified = true;
+            }),
+            onClear: () => setState(() {
+              _temperature = null;
+              _isModified = true;
+            }),
+          ),
+          const SizedBox(height: 4),
+          _buildInfoRow(l10n.settingsAiProviderTemperatureHelp),
+          const SizedBox(height: 16),
+
+          // Top P
+          _buildSliderField(
+            label: l10n.settingsAiProviderTopP,
+            value: _topP,
+            min: 0.0,
+            max: 1.0,
+            divisions: 20,
+            defaultValue: 0.95,
+            onChanged: (v) => setState(() {
+              _topP = v;
+              _isModified = true;
+            }),
+            onClear: () => setState(() {
+              _topP = null;
+              _isModified = true;
+            }),
+          ),
+          const SizedBox(height: 4),
+          _buildInfoRow(l10n.settingsAiProviderTopPHelp),
+          const SizedBox(height: 16),
+
+          // Max Tokens
+          TextField(
+            controller: _maxTokensController,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             decoration: InputDecoration(
-              labelText: l10n.settingsAiProviderReasoningEffort,
+              labelText: l10n.settingsAiProviderMaxTokens,
               border: const OutlineInputBorder(),
             ),
-            items: [
-              DropdownMenuItem(
-                value: AiReasoningEffort.auto,
-                child: Text(l10n.settingsAiProviderReasoningEffortAuto),
-              ),
-              DropdownMenuItem(
-                value: AiReasoningEffort.low,
-                child: Text(l10n.settingsAiProviderReasoningEffortLow),
-              ),
-              DropdownMenuItem(
-                value: AiReasoningEffort.medium,
-                child: Text(l10n.settingsAiProviderReasoningEffortMedium),
-              ),
-              DropdownMenuItem(
-                value: AiReasoningEffort.high,
-                child: Text(l10n.settingsAiProviderReasoningEffortHigh),
-              ),
-            ],
-            onChanged: (value) {
-              if (value == null) return;
-              setState(() {
-                _reasoningEffort = value;
-                _isModified = true;
-              });
-            },
           ),
-          const SizedBox(height: 10),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                Icons.info_outline_rounded,
-                size: 16,
-                color: colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  l10n.settingsAiProviderReasoningEffortHelp,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    height: 1.35,
-                  ),
-                ),
-              ),
-            ],
+          const SizedBox(height: 4),
+          _buildInfoRow(l10n.settingsAiProviderMaxTokensHelp),
+          const SizedBox(height: 16),
+
+          // Extra Headers
+          TextField(
+            controller: _extraHeadersController,
+            maxLines: 3,
+            decoration: InputDecoration(
+              labelText: l10n.settingsAiProviderExtraHeaders,
+              border: const OutlineInputBorder(),
+              hintText: '{"X-Custom": "value"}',
+            ),
           ),
+          const SizedBox(height: 4),
+          _buildInfoRow(l10n.settingsAiProviderExtraHeadersHelp),
         ],
       ),
+    );
+  }
+
+  Widget _buildSliderField({
+    required String label,
+    required double? value,
+    required double min,
+    required double max,
+    required int divisions,
+    required ValueChanged<double> onChanged,
+    required VoidCallback onClear,
+    double? defaultValue,
+  }) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(label, style: theme.textTheme.titleSmall),
+            ),
+            Text(
+              value != null ? value.toStringAsFixed(2) : '--',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (value != null)
+              IconButton(
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: onClear,
+                tooltip: L10n.of(context).commonReset,
+                visualDensity: VisualDensity.compact,
+              ),
+            if (value == null)
+              IconButton(
+                icon: const Icon(Icons.tune, size: 18),
+                onPressed: () => onChanged(defaultValue ?? min),
+                visualDensity: VisualDensity.compact,
+              ),
+          ],
+        ),
+        Slider(
+          value: value ?? min,
+          min: min,
+          max: max,
+          divisions: divisions,
+          onChanged: value != null ? onChanged : null,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInfoRow(String text) {
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          Icons.info_outline_rounded,
+          size: 16,
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              height: 1.35,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -605,17 +743,8 @@ class _AiProviderDetailPageState extends ConsumerState<AiProviderDetailPage> {
     }
   }
 
-  void _saveProvider() {
-    final l10n = L10n.of(context);
-
-    if (_nameController.text.isEmpty || _urlController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.commonFailed)),
-      );
-      return;
-    }
-
-    final provider = AiProvider(
+  AiProvider _buildProviderFromForm() {
+    return AiProvider(
       id: widget.providerId ?? const Uuid().v4(),
       title: _nameController.text,
       url: _urlController.text,
@@ -630,6 +759,12 @@ class _AiProviderDetailPageState extends ConsumerState<AiProviderDetailPage> {
       apiKeys: _apiKeys,
       model: _modelController.text,
       reasoningEffort: _reasoningEffort,
+      temperature: _temperature,
+      topP: _topP,
+      maxTokens: int.tryParse(_maxTokensController.text.trim()),
+      extraHeaders: _extraHeadersController.text.trim().isEmpty
+          ? null
+          : _extraHeadersController.text.trim(),
       keyIndex: 0,
       createdAt: widget.providerId != null
           ? ref
@@ -639,6 +774,19 @@ class _AiProviderDetailPageState extends ConsumerState<AiProviderDetailPage> {
           : DateTime.now(),
       updatedAt: DateTime.now(),
     );
+  }
+
+  void _saveProvider() {
+    final l10n = L10n.of(context);
+
+    if (_nameController.text.isEmpty || _urlController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.commonFailed)),
+      );
+      return;
+    }
+
+    final provider = _buildProviderFromForm();
 
     if (widget.providerId == null) {
       ref.read(aiProvidersProvider.notifier).addProvider(provider);
@@ -652,6 +800,7 @@ class _AiProviderDetailPageState extends ConsumerState<AiProviderDetailPage> {
 
   void _testConnection() {
     final l10n = L10n.of(context);
+    String? effectiveId = widget.providerId;
 
     // Save any pending changes before testing so the provider has the latest config
     if (_isModified) {
@@ -661,30 +810,8 @@ class _AiProviderDetailPageState extends ConsumerState<AiProviderDetailPage> {
         );
         return;
       }
-      final provider = AiProvider(
-        id: widget.providerId ?? const Uuid().v4(),
-        title: _nameController.text,
-        url: _urlController.text,
-        protocol: _selectedProtocol,
-        enabled: true,
-        isBuiltin: widget.providerId != null
-            ? ref
-                .read(aiProvidersProvider)
-                .firstWhere((p) => p.id == widget.providerId)
-                .isBuiltin
-            : false,
-        apiKeys: _apiKeys,
-        model: _modelController.text,
-        reasoningEffort: _reasoningEffort,
-        keyIndex: 0,
-        createdAt: widget.providerId != null
-            ? ref
-                .read(aiProvidersProvider)
-                .firstWhere((p) => p.id == widget.providerId)
-                .createdAt
-            : DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
+      final provider = _buildProviderFromForm();
+      effectiveId = provider.id;
       if (widget.providerId == null) {
         ref.read(aiProvidersProvider.notifier).addProvider(provider);
       } else {
@@ -703,7 +830,7 @@ class _AiProviderDetailPageState extends ConsumerState<AiProviderDetailPage> {
           width: double.maxFinite,
           child: AiStream(
             prompt: generatePromptTest(),
-            identifier: widget.providerId,
+            identifier: effectiveId,
             regenerate: true,
           ),
         ),

@@ -13,6 +13,9 @@ import 'package:anx_reader/main.dart';
 import 'package:anx_reader/models/ai_quick_prompt_chip.dart';
 import 'package:anx_reader/models/book.dart';
 import 'package:anx_reader/models/read_theme.dart';
+import 'package:anx_reader/page/book_analysis/book_analysis_page.dart';
+import 'package:anx_reader/page/text_edit/text_edit_page.dart';
+import 'package:anx_reader/service/text_edit_service.dart';
 import 'package:anx_reader/page/book_detail.dart';
 import 'package:anx_reader/page/book_player/epub_player.dart';
 import 'package:anx_reader/providers/sync.dart';
@@ -695,6 +698,23 @@ class ReadingPageState extends ConsumerState<ReadingPage>
                   ),
                   actions: [
                     if (EnvVar.enableAIFeature) aiButton,
+                    if (EnvVar.enableAIFeature)
+                      IconButton(
+                        tooltip: L10n.of(context).settingsAiBookAnalysis,
+                        icon: const Icon(Icons.analytics_outlined),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => BookAnalysisPage(
+                                book: widget.book,
+                                webViewController:
+                                    epubPlayerKey.currentState?.webViewController,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     IconButton(
                       icon: const Icon(Icons.copy),
                       tooltip: L10n.of(context).readingPageCopyChapterContent,
@@ -712,6 +732,53 @@ class ReadingPageState extends ConsumerState<ReadingPage>
                         } catch (e) {
                           AnxToast.show(
                               L10n.of(context).readingPageErrorCopyingContent);
+                        }
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.edit_note),
+                      tooltip: L10n.of(context).readingPageEditText,
+                      onPressed: () async {
+                        try {
+                          final content = await epubPlayerKey.currentState
+                              ?.theChapterContent();
+                          if (content == null || content.isEmpty) {
+                            AnxToast.show(L10n.of(context)
+                                .readingPageNoContentToEdit);
+                            return;
+                          }
+
+                          final chapterHref =
+                              epubPlayerKey.currentState?.chapterHref ?? '';
+                          final result =
+                              await Navigator.push<Map<String, String>>(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => TextEditPage(
+                                book: widget.book,
+                                chapterHref: chapterHref,
+                                originalContent: content,
+                              ),
+                            ),
+                          );
+
+                          if (result != null) {
+                            final editsJson = result['editsJson'];
+                            if (editsJson != null) {
+                              final jsSource = TextEditService
+                                  .buildApplyEditsJsSourceFromJson(editsJson);
+                              if (jsSource.isNotEmpty) {
+                                await epubPlayerKey
+                                    .currentState?.webViewController
+                                    .evaluateJavascript(
+                                  source: jsSource,
+                                );
+                              }
+                            }
+                          }
+                        } catch (e) {
+                          AnxToast.show(
+                              L10n.of(context).readingPageErrorEditingText);
                         }
                       },
                     ),

@@ -84,7 +84,27 @@ class _AISettingsState extends ConsumerState<AISettings> {
         "identifier": AiPrompts.mindmap,
         "title": l10n.settingsAiPromptMindmap,
         "variables": [],
-      }
+      },
+      {
+        "identifier": AiPrompts.bookAnalysisChapter,
+        "title": l10n.settingsAiPromptBookAnalysisChapter,
+        "variables": ["book_title", "chapter_label", "chapter_index", "total_chapters", "chapter_content"],
+      },
+      {
+        "identifier": AiPrompts.bookAnalysisBatchMerge,
+        "title": l10n.settingsAiPromptBookAnalysisBatchMerge,
+        "variables": ["book_title", "batch_count", "batch_summaries"],
+      },
+      {
+        "identifier": AiPrompts.bookAnalysisFinalSynthesis,
+        "title": l10n.settingsAiPromptBookAnalysisFinalSynthesis,
+        "variables": ["book_title", "book_author", "batch_summaries", "chapter_samples"],
+      },
+      {
+        "identifier": AiPrompts.bookAnalysisFanfic,
+        "title": l10n.settingsAiPromptBookAnalysisFanfic,
+        "variables": ["book_title", "analysis_json", "outline"],
+      },
     ];
 
     var promptTile = CustomSettingsTile(
@@ -99,7 +119,7 @@ class _AISettingsState extends ConsumerState<AISettings> {
               SmartDialog.show(builder: (context) {
                 final controller = TextEditingController(
                   text: Prefs().getAiPrompt(
-                    AiPrompts.values[index],
+                    prompts[index]["identifier"],
                   ),
                 );
 
@@ -149,9 +169,9 @@ class _AISettingsState extends ConsumerState<AISettings> {
                   actions: [
                     TextButton(
                       onPressed: () {
-                        Prefs().deleteAiPrompt(AiPrompts.values[index]);
+                        Prefs().deleteAiPrompt(prompts[index]["identifier"]);
                         controller.text = Prefs().getAiPrompt(
-                          AiPrompts.values[index],
+                          prompts[index]["identifier"],
                         );
                       },
                       child: Text(L10n.of(context).commonReset),
@@ -159,7 +179,7 @@ class _AISettingsState extends ConsumerState<AISettings> {
                     TextButton(
                       onPressed: () {
                         Prefs().saveAiPrompt(
-                          AiPrompts.values[index],
+                          prompts[index]["identifier"],
                           controller.text,
                         );
                       },
@@ -266,6 +286,13 @@ class _AISettingsState extends ConsumerState<AISettings> {
         title: Text(l10n.settingsAiTools),
         tiles: [
           toolsTile,
+        ],
+      ),
+      SettingsSection(
+        title: Text(l10n.settingsAiBookAnalysis),
+        tiles: [
+          CustomSettingsTile(
+            child: _BookAnalysisConcurrencyTile(setState: () => setState(() {}))),
         ],
       ),
       SettingsSection(
@@ -813,6 +840,68 @@ class _AiRpmTileState extends State<_AiRpmTile> {
           onChanged: (value) {
             Prefs().aiRpm = int.tryParse(value) ?? 0;
             widget.setState();
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _BookAnalysisConcurrencyTile extends StatefulWidget {
+  const _BookAnalysisConcurrencyTile({required this.setState});
+
+  final VoidCallback setState;
+
+  @override
+  State<_BookAnalysisConcurrencyTile> createState() =>
+      _BookAnalysisConcurrencyTileState();
+}
+
+class _BookAnalysisConcurrencyTileState
+    extends State<_BookAnalysisConcurrencyTile> {
+  late TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(
+        text: Prefs().bookAnalysisConcurrency.toString());
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = L10n.of(context);
+    return ListTile(
+      title: Text(l10n.settingsAiBookAnalysisConcurrency),
+      subtitle: Text(
+        l10n.settingsAiBookAnalysisConcurrencyHelp,
+        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+      ),
+      trailing: SizedBox(
+        width: 80,
+        child: TextField(
+          controller: _controller,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          textAlign: TextAlign.center,
+          decoration: const InputDecoration(
+            hintText: '3',
+            border: OutlineInputBorder(),
+            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            isDense: true,
+          ),
+          onChanged: (value) {
+            final parsed = int.tryParse(value);
+            if (parsed != null && parsed >= 1 && parsed <= 10) {
+              Prefs().bookAnalysisConcurrency = parsed;
+              widget.setState();
+            }
           },
         ),
       ),

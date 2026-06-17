@@ -9,6 +9,11 @@ class CancelableLangchainRunner {
   static const String thinkTag = '<think/>';
   StreamSubscription<ChatResult>? _subscription;
 
+  String _lastReasoningSignature = '';
+
+  /// The reasoning signature captured from the most recent stream response.
+  String get lastReasoningSignature => _lastReasoningSignature;
+
   void cancel() {
     _subscription?.cancel();
     _subscription = null;
@@ -22,6 +27,7 @@ class CancelableLangchainRunner {
     String answerBuffer = '';
     bool reasoningDetected = false;
     bool answerPhaseStarted = false;
+    _lastReasoningSignature = '';
 
     late StreamController<String> controller;
     controller = StreamController<String>(
@@ -31,6 +37,10 @@ class CancelableLangchainRunner {
           (event) {
             final rawChunk = event.output.content;
             final reasoningChunk = event.output.reasoningContent;
+            final sig = event.output.reasoningSignature;
+            if (sig.isNotEmpty) {
+              _lastReasoningSignature = sig;
+            }
             if (rawChunk.isEmpty && reasoningChunk.isEmpty) {
               return;
             }
@@ -108,6 +118,7 @@ class CancelableLangchainRunner {
     int maxIterations = 120,
   }) {
     final controller = StreamController<String>();
+    _lastReasoningSignature = '';
 
     Future<void>(() async {
       final parser = const ToolsAgentOutputParser();
@@ -203,6 +214,10 @@ class CancelableLangchainRunner {
                   : aggregated!.concat(normalizedChunk);
               final output = aggregated!.output;
               final reasoningChunk = normalizedChunk.output.reasoningContent;
+              final sig = normalizedChunk.output.reasoningSignature;
+              if (sig.isNotEmpty) {
+                _lastReasoningSignature = sig;
+              }
 
               if (reasoningChunk.isNotEmpty) {
                 appendThinkingChunk(reasoningChunk);
@@ -344,6 +359,7 @@ class CancelableLangchainRunner {
     final output = AIChatMessage(
       content: content,
       reasoningContent: reasoningContent,
+      reasoningSignature: chunk.output.reasoningSignature,
       toolCalls: chunk.output.toolCalls,
     );
 
@@ -427,6 +443,7 @@ class CancelableLangchainRunner {
     return AIChatMessage(
       content: message.content,
       reasoningContent: message.reasoningContent,
+      reasoningSignature: message.reasoningSignature,
       toolCalls: enrichedToolCalls,
     );
   }

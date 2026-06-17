@@ -51,6 +51,7 @@ class AiChatStream extends ConsumerStatefulWidget {
 
 class AiChatStreamState extends ConsumerState<AiChatStream> {
   final TextEditingController inputController = TextEditingController();
+  final FocusNode _inputFocusNode = FocusNode();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   Stream<List<ChatMessage>>? _messageStream;
   StreamController<List<ChatMessage>>? _messageController;
@@ -115,6 +116,7 @@ class AiChatStreamState extends ConsumerState<AiChatStream> {
   @override
   void dispose() {
     inputController.dispose();
+    _inputFocusNode.dispose();
     _messageSubscription?.cancel();
     _messageController?.close();
     _scrollController.dispose();
@@ -370,6 +372,7 @@ class AiChatStreamState extends ConsumerState<AiChatStream> {
     if (inputController.text.trim().isEmpty) return;
     final message = inputController.text.trim();
     inputController.clear();
+    _inputFocusNode.unfocus();
 
     _messageSubscription?.cancel();
     _messageController?.close();
@@ -645,6 +648,8 @@ class AiChatStreamState extends ConsumerState<AiChatStream> {
             SizedBox(height: 4),
             TextField(
               controller: inputController,
+              focusNode: _inputFocusNode,
+              autofocus: false,
               decoration: InputDecoration(
                 isDense: true,
                 hintText: L10n.of(context).aiHintInputPlaceholder,

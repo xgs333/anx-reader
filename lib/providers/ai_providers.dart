@@ -1,4 +1,5 @@
 import 'package:anx_reader/config/shared_preference_provider.dart';
+import 'package:anx_reader/enums/ai_reasoning_effort.dart';
 import 'package:anx_reader/models/ai_provider.dart';
 import 'package:anx_reader/service/ai/ai_services.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -39,6 +40,11 @@ class AiProviders extends _$AiProviders {
       final url = oldConfig['url'] ?? option.defaultUrl;
       final model = oldConfig['model'] ?? option.defaultModel;
       final apiKey = oldConfig['api_key'] ?? option.defaultApiKey;
+      final temperature = double.tryParse(oldConfig['temperature'] ?? '');
+      final topP = double.tryParse(oldConfig['top_p'] ?? '');
+      final maxTokens = int.tryParse(oldConfig['max_tokens'] ?? '');
+      final reasoningEffort = AiReasoningEffort.fromCode(
+          oldConfig['reasoning_effort']);
 
       // Determine protocol from identifier
       AiProtocol protocol;
@@ -72,6 +78,10 @@ class AiProviders extends _$AiProviders {
               ]
             : [],
         model: model,
+        reasoningEffort: reasoningEffort,
+        temperature: temperature,
+        topP: topP,
+        maxTokens: maxTokens,
         keyIndex: 0,
         createdAt: now,
         updatedAt: now,
@@ -115,7 +125,7 @@ class AiProviders extends _$AiProviders {
   void addProvider(AiProvider provider) {
     final now = DateTime.now();
     final newProvider = provider.copyWith(
-      id: const Uuid().v4(),
+      id: provider.id.isEmpty ? const Uuid().v4() : provider.id,
       createdAt: now,
       updatedAt: now,
     );

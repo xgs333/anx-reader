@@ -1152,6 +1152,10 @@ class Reader {
       // console.log('Applying code highlighting to loaded document, theme:', style.codeHighlightTheme)
       applyCodeHighlighting(style.codeHighlightTheme, doc)
     }
+
+    // Request text edits from Flutter and apply them
+    const sectionHref = this.view?.book?.sections?.[this.#index]?.id || ''
+    callFlutter('requestTextEdits', { href: sectionHref })
   }
 
   #onRelocate({ detail }) {
@@ -1198,6 +1202,10 @@ class Reader {
     return this.#index
   }
 
+  get doc() {
+    return this.#doc
+  }
+
   #saveOriginalContent = () => {
     // this.#originalContent = this.#doc.cloneNode(true)
 
@@ -1236,7 +1244,33 @@ class Reader {
   }
 
   getChapterContent = () => {
-    return this.#doc.body.textContent
+    // Build text content with newlines for block elements so that
+    // the LCS diff in TextEditService can work on line-based edits
+    // that correspond to individual paragraphs/block elements.
+    if (!this.#doc?.body) return ''
+    return this.#getStructuredText(this.#doc.body).trim()
+  }
+
+  #getStructuredText = (node) => {
+    const blockTags = new Set([
+      'p', 'div', 'br', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      'li', 'blockquote', 'tr', 'section', 'article', 'header', 'footer'
+    ])
+    let result = ''
+    for (const child of node.childNodes) {
+      if (child.nodeType === Node.TEXT_NODE) {
+        result += child.textContent
+      } else if (child.nodeType === Node.ELEMENT_NODE) {
+        const tag = child.tagName.toLowerCase()
+        if (tag === 'script' || tag === 'style') continue
+        if (blockTags.has(tag)) {
+          result += '\n' + this.#getStructuredText(child) + '\n'
+        } else {
+          result += this.#getStructuredText(child)
+        }
+      }
+    }
+    return result
   }
 
   getChapterContentByHref = async (target, options = {}) => {
@@ -1250,7 +1284,7 @@ class Reader {
     if (!section?.createDocument) return ''
 
     const doc = await section.createDocument()
-    let content = doc?.body?.textContent ?? ''
+    let content = doc?.body ? this.#getStructuredText(doc.body).trim() : ''
 
     if (!content) return ''
 
@@ -1816,6 +1850,174 @@ window.previousContent = (count = 2000) => reader.getPreviousContent(count)
 window.getChapterContentByHref = async (href, opts) =>
   reader.getChapterContentByHref(href, opts)
 
+window.getAllChapters = () => {
+  const book = reader.view?.book
+  if (!book?.sections) return JSON.stringify([])
+
+  // Flatten TOC tree into href -> label map
+  const tocMap = new Map()
+  const flattenToc = (items) => {
+    if (!items) return
+    for (const item of items) {
+      if (item.href) {
+        const key = item.href.split('#')[0]
+        if (!tocMap.has(key)) tocMap.set(key, item.label)
+      }
+      if (item.subitems) flattenToc(item.subitems)
+    }
+  }
+  flattenToc(book.toc)
+
+  // Build chapter list from sections
+  const chapters = book.sections
+    .filter(s => s && s.id)
+    .map((s, i) => ({
+      href: s.id,
+      label: tocMap.get(s.id) || tocMap.get(s.id.split('#')[0]) || `Chapter ${i + 1}`,
+    }))
+
+  return JSON.stringify(chapters)
+}
+
+window.applyTextEdits = (editsJson) => {
+  let edits
+  try {
+    edits = JSON.parse(editsJson)
+  } catch (e) {
+    console.warn('applyTextEdits: invalid JSON', e)
+    return 0
+  }
+  if (!edits || !edits.length) return 0
+
+  const doc = reader.doc
+  if (!doc?.body) return 0
+
+  const blockTags = new Set([
+    'p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'li', 'blockquote', 'section', 'article', 'header', 'footer'
+  ])
+
+  let appliedCount = 0
+
+  // Collect block elements — only leaf blocks (no block element children)
+  // to ensure we match the most specific block first.
+  const blockElements = []
+  const collectLeafBlocks = (node) => {
+    if (!node) return
+    for (const child of node.childNodes) {
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        const tag = child.tagName.toLowerCase()
+        if (tag === 'script' || tag === 'style') continue
+        if (blockTags.has(tag)) {
+          // Check if this block has any block element children
+          let hasBlockChild = false
+          for (const grandchild of child.childNodes) {
+            if (grandchild.nodeType === Node.ELEMENT_NODE &&
+                blockTags.has(grandchild.tagName.toLowerCase())) {
+              hasBlockChild = true
+              break
+            }
+          }
+          if (hasBlockChild) {
+            // Recurse into non-leaf block
+            collectLeafBlocks(child)
+          } else {
+            // Leaf block — collect it
+            blockElements.push(child)
+          }
+        } else {
+          collectLeafBlocks(child)
+        }
+      }
+    }
+  }
+  collectLeafBlocks(doc.body)
+
+  // Normalize whitespace for comparison (trim + collapse internal whitespace)
+  const normalizeText = (s) => {
+    if (!s) return ''
+    return s.replace(/\s+/g, ' ').trim()
+  }
+
+  for (const edit of edits) {
+    if (!edit.originalText) continue
+    let matched = false
+
+    const normalizedOriginal = normalizeText(edit.originalText)
+
+    // Strategy 1: Match against leaf block elements' textContent.
+    // Only modify text nodes (don't change DOM structure) to keep
+    // #saveOriginalContent/#restoreOriginalContent working correctly.
+    for (const block of blockElements) {
+      const blockText = block.textContent
+      const normalizedBlock = normalizeText(blockText)
+
+      if (normalizedBlock === normalizedOriginal) {
+        // Exact match: replace text in this block's text nodes
+        const textNodes = []
+        const walker = document.createTreeWalker(
+          block, NodeFilter.SHOW_TEXT, null, false
+        )
+        let tn
+        while (tn = walker.nextNode()) textNodes.push(tn)
+
+        if (textNodes.length === 1) {
+          // Simple: single text node, just replace
+          textNodes[0].textContent = edit.editedText
+        } else if (textNodes.length > 1) {
+          // Multiple text nodes: put edited text in first, clear rest
+          textNodes[0].textContent = edit.editedText
+          for (let i = 1; i < textNodes.length; i++) {
+            textNodes[i].textContent = ''
+          }
+        }
+        appliedCount++
+        matched = true
+        break
+      } else if (normalizedBlock.includes(normalizedOriginal) &&
+                 normalizedBlock !== normalizedOriginal) {
+        // Partial match within block: try replacing in individual text nodes
+        const walker = document.createTreeWalker(
+          block, NodeFilter.SHOW_TEXT, null, false
+        )
+        let tn
+        while (tn = walker.nextNode()) {
+          const normalizedNode = normalizeText(tn.textContent)
+          if (normalizedNode.includes(normalizedOriginal)) {
+            tn.textContent = tn.textContent.replaceAll(
+              edit.originalText, edit.editedText
+            )
+            appliedCount++
+            matched = true
+            break
+          }
+        }
+        if (matched) break
+      }
+    }
+
+    // Strategy 2: Fall back to walking all text nodes in the body
+    if (!matched) {
+      const walker = document.createTreeWalker(
+        doc.body, NodeFilter.SHOW_TEXT, null, false
+      )
+      let node
+      while (node = walker.nextNode()) {
+        const normalizedNode = normalizeText(node.textContent)
+        if (normalizedNode.includes(normalizedOriginal)) {
+          node.textContent = node.textContent.replaceAll(
+            edit.originalText, edit.editedText
+          )
+          appliedCount++
+          matched = true
+        }
+      }
+    }
+  }
+
+  return appliedCount
+}
+
 // window.convertChinese = (mode) => reader.convertChinese(mode)
 
 // window.bionicReading = (enable) => reader.bionicReading(enable)
@@ -1831,6 +2033,9 @@ window.closeFootNote = () => {
 window.readingFeatures = (rules) => {
   readingRules = { ...readingRules, ...rules }
   reader.readingFeatures()
+  // Reapply text edits after readingFeatures restores original content
+  const href = globalThis.reader?.view?.book?.sections?.[globalThis.reader?.index]?.id || ''
+  callFlutter('requestTextEdits', { href })
 }
 
 window.pullUp = () => {

@@ -152,11 +152,13 @@ String chatMessageDisplayContent(ChatMessage message) {
 AIChatMessage assistantMessageFromDisplayContent(
   String content, {
   List<AIChatMessageToolCall> toolCalls = const [],
+  String reasoningSignature = '',
 }) {
   final envelope = splitReasoningEnvelope(content);
   return AIChatMessage(
     content: envelope.answerContent,
     reasoningContent: envelope.reasoningContent,
+    reasoningSignature: reasoningSignature,
     toolCalls: toolCalls,
   );
 }

@@ -49,6 +49,7 @@ class LangchainAiConfig {
       temperature: temperature,
       topP: topP,
       maxTokens: maxTokens,
+      thinking: reasoningEffort.toAnthropicThinking(),
     );
   }
 
@@ -57,7 +58,7 @@ class LangchainAiConfig {
       model: model.isEmpty ? null : model,
       temperature: temperature,
       topP: topP,
-      maxOutputTokens: maxOutputTokens,
+      maxOutputTokens: maxOutputTokens ?? maxTokens,
     );
   }
 
@@ -98,6 +99,10 @@ class LangchainAiConfig {
     required String apiKey,
     required String url,
     AiReasoningEffort reasoningEffort = AiReasoningEffort.auto,
+    double? temperature,
+    double? topP,
+    int? maxTokens,
+    Map<String, String>? headers,
   }) {
     return LangchainAiConfig(
       identifier: providerId,
@@ -105,6 +110,10 @@ class LangchainAiConfig {
       model: model,
       baseUrl: _deriveBaseUrl(url),
       reasoningEffort: reasoningEffort,
+      temperature: temperature,
+      topP: topP,
+      maxTokens: maxTokens,
+      headers: headers ?? const {},
     );
   }
 
@@ -242,6 +251,15 @@ extension on AiReasoningEffort {
       AiReasoningEffort.low => ChatOpenAIReasoningEffort.low,
       AiReasoningEffort.medium => ChatOpenAIReasoningEffort.medium,
       AiReasoningEffort.high => ChatOpenAIReasoningEffort.high,
+    };
+  }
+
+  ChatAnthropicThinking? toAnthropicThinking() {
+    return switch (this) {
+      AiReasoningEffort.auto => null,
+      AiReasoningEffort.low => const ChatAnthropicThinking.enabled(budgetTokens: 1024),
+      AiReasoningEffort.medium => const ChatAnthropicThinking.enabled(budgetTokens: 2048),
+      AiReasoningEffort.high => const ChatAnthropicThinking.enabled(budgetTokens: 4096),
     };
   }
 }

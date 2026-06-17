@@ -1,8 +1,7 @@
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 const lerp = (min, max, x) => x * (max - min) + min
-const easeOutSine = x => Math.sin((x * Math.PI) / 2)
-// const easeOutSine = x => 1 - (1 - x) * (1 - x);
+const easeOutCubic = x => 1 - Math.pow(1 - x, 3)
 const animate = (a, b, duration, ease, render) => new Promise(resolve => {
   let start
   const step = now => {
@@ -504,6 +503,8 @@ export class Paginator extends HTMLElement {
             -webkit-overflow-scrolling: touch;
             -ms-overflow-style: none;  /* Internet Explorer 10+ */
             scrollbar-width: none;  /* Firefox */
+            will-change: scroll-position;
+            scroll-behavior: auto;
         }
         #container::-webkit-scrollbar {
             display: none;  /* Safari and Chrome */
@@ -512,6 +513,7 @@ export class Paginator extends HTMLElement {
             grid-column: 1 / -1;
             grid-row: 2;
             overflow: auto;
+            will-change: scroll-position;
         }
         #header {
             grid-column: 3 / 4;
@@ -801,12 +803,12 @@ export class Paginator extends HTMLElement {
     const currentPage = Math.round(currentOffset / size)
     
     // Determine target page based on velocity
-    const velocityThreshold = 0.3  // Higher threshold to reduce accidental triggers
+    const velocityThreshold = 0.15
     let targetPage = currentPage
     if (Math.abs(velocity) > velocityThreshold) {
       targetPage += velocity > 0 ? 1 : -1
     }
-    
+
     // Single page limit (keep existing feature)
     const originPage = state?.startPage ?? currentPage
     if (!this.scrolled) {
@@ -814,14 +816,17 @@ export class Paginator extends HTMLElement {
       if (delta > 1) targetPage = originPage + 1
       else if (delta < -1) targetPage = originPage - 1
     }
-    
+
     // Boundary limits
     targetPage = Math.max(0, Math.min(pages - 1, targetPage))
-    
-    // Calculate animation duration based on distance
+
+    // Calculate animation duration based on distance and velocity
     const targetOffset = targetPage * size
     const distance = Math.abs(targetOffset - currentOffset)
-    const duration = Math.max(200, Math.min(300, 250 * (distance / (size || 1))))
+    const baseDuration = 280
+    const velocityFactor = Math.max(0.3, 1 - Math.abs(velocity) * 0.5)
+    const distanceFactor = distance / (size || 1)
+    const duration = Math.max(150, Math.min(350, baseDuration * distanceFactor * velocityFactor))
 
     const pageArg = this.#rtl ? -targetPage : targetPage
     this.#isSnapping = true
@@ -1046,7 +1051,7 @@ export class Paginator extends HTMLElement {
     
     const opts = typeof smooth === 'object' ? smooth ?? {} : {}
     const shouldAnimate = opts.animate ?? (reason === 'snap' || smooth === true)
-    const easing = opts.easing ?? easeOutSine
+    const easing = opts.easing ?? easeOutCubic
     
     const finish = () => {
       this.#afterScroll(reason)
@@ -1070,17 +1075,18 @@ export class Paginator extends HTMLElement {
 
       this.#justAnchored = true
 
-      return animate(
-        element[scrollProp],
-        offset,
-        duration,
-        easing,
-        x => element[scrollProp] = x,
-      ).then(() => {
-        // Ensure exact position
-        element[scrollProp] = offset
+      // GPU-accelerated smooth scroll: native scroll-behavior uses the
+      // compositor thread instead of blocking the main JS thread
+      element.style.scrollBehavior = 'smooth'
+      element[scrollProp] = offset
+
+      // Safety timeout ensures cleanup after native animation completes
+      return wait(duration + 250).then(() => {
+        element.style.scrollBehavior = ''
         finish()
       }).catch(() => {
+        element.style.scrollBehavior = ''
+        element[scrollProp] = offset
         this.#ignoreNativeScroll = false
       })
     } else {
@@ -1296,7 +1302,7 @@ export class Paginator extends HTMLElement {
       index: this.#adjacentIndex(dir),
       anchor: prev ? () => 1 : () => 0,
     })
-    if (shouldGo || !this.hasAttribute('animated')) await wait(100)
+    if (shouldGo || !this.hasAttribute('animated')) await wait(50)
     this.#locked = false
   }
   prev(distance) {

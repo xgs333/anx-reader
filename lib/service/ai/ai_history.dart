@@ -54,6 +54,9 @@ class AiChatHistoryEntry {
         if (m is AIChatMessage && m.reasoningContent.isNotEmpty) {
           map['reasoningContent'] = m.reasoningContent;
         }
+        if (m is AIChatMessage && m.reasoningSignature.isNotEmpty) {
+          map['reasoningSignature'] = m.reasoningSignature;
+        }
         return map;
       }).toList(growable: false),
     };
@@ -70,7 +73,8 @@ class AiChatHistoryEntry {
           if (msg is AIChatMessage && typedItem.containsKey('reasoningContent')) {
             messages.add(AIChatMessage(
               content: msg.content,
-              reasoningContent: typedItem['reasoningContent'],
+              reasoningContent: typedItem['reasoningContent'] as String? ?? '',
+              reasoningSignature: typedItem['reasoningSignature'] as String? ?? '',
               toolCalls: msg.toolCalls,
             ));
           } else {

@@ -32,6 +32,7 @@ import 'package:anx_reader/providers/toc_search.dart';
 import 'package:anx_reader/service/tts/base_tts.dart';
 import 'package:anx_reader/service/tts/models/tts_sentence.dart';
 import 'package:anx_reader/service/tts/tts_handler.dart';
+import 'package:anx_reader/service/text_edit_service.dart';
 import 'package:anx_reader/utils/coordinates_to_part.dart';
 import 'package:anx_reader/utils/js/convert_dart_color_to_js.dart';
 import 'package:anx_reader/utils/platform_utils.dart';
@@ -97,6 +98,7 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
   String? backgroundColor;
   String? textColor;
   Timer? styleTimer;
+  Timer? _saveProgressTimer;
   String bookmarkCfi = '';
   bool bookmarkExists = false;
   WritingModeEnum writingMode = WritingModeEnum.horizontalTb;
@@ -107,7 +109,11 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
   // Scroll wheel debounce
   Timer? _scrollDebounceTimer;
   double _accumulatedScrollDelta = 0;
-  static const double _scrollThreshold = 50.0;
+  static const double _scrollThreshold = 30.0;
+
+  // Throttle onRelocated calls during scroll mode
+  Timer? _relocateThrottleTimer;
+  bool _relocatePending = false;
 
   // to know anytime if we are on top of navigation stack
   bool get _isTopOfNavigationStack =>
@@ -623,6 +629,31 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
     }
   }
 
+  void _applyRelocate(Map<String, dynamic> location) {
+    setState(() {
+      cfi = location['cfi'] ?? '';
+      percentage =
+          double.tryParse(location['percentage'].toString()) ?? 0.0;
+      chapterTitle = location['chapterTitle'] ?? '';
+      chapterHref = location['chapterHref'] ?? '';
+      chapterCurrentPage = location['chapterCurrentPage'] ?? 0;
+      chapterTotalPages = location['chapterTotalPages'] ?? 0;
+      bookmarkExists = location['bookmark']['exists'] ?? false;
+      bookmarkCfi = location['bookmark']['cfi'] ?? '';
+      writingMode =
+          WritingModeEnum.fromCode(location['writingMode'] ?? '');
+    });
+    ref.read(currentReadingProvider.notifier).update(
+          cfi: cfi,
+          percentage: percentage,
+          chapterTitle: chapterTitle,
+          chapterHref: chapterHref,
+          chapterCurrentPage: chapterCurrentPage,
+          chapterTotalPages: chapterTotalPages,
+        );
+    widget.updateParent();
+  }
+
   Future<void> setHandler(InAppWebViewController controller) async {
     controller.addJavaScriptHandler(
         handlerName: 'onLoadEnd',
@@ -635,32 +666,32 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
         callback: (args) {
           Map<String, dynamic> location = args[0];
           if (cfi == location['cfi']) return;
-          // if (chapterHref != location['chapterHref']) {
-          //   refreshToc();
-          // }
-          setState(() {
-            cfi = location['cfi'] ?? '';
-            percentage =
-                double.tryParse(location['percentage'].toString()) ?? 0.0;
-            chapterTitle = location['chapterTitle'] ?? '';
-            chapterHref = location['chapterHref'] ?? '';
-            chapterCurrentPage = location['chapterCurrentPage'] ?? 0;
-            chapterTotalPages = location['chapterTotalPages'] ?? 0;
-            bookmarkExists = location['bookmark']['exists'] ?? false;
-            bookmarkCfi = location['bookmark']['cfi'] ?? '';
-            writingMode =
-                WritingModeEnum.fromCode(location['writingMode'] ?? '');
-          });
-          ref.read(currentReadingProvider.notifier).update(
-                cfi: cfi,
-                percentage: percentage,
-                chapterTitle: chapterTitle,
-                chapterHref: chapterHref,
-                chapterCurrentPage: chapterCurrentPage,
-                chapterTotalPages: chapterTotalPages,
-              );
-          widget.updateParent();
+
+          // Update internal state immediately (lightweight)
+          final newCfi = location['cfi'] ?? '';
+          final newPercentage =
+              double.tryParse(location['percentage'].toString()) ?? 0.0;
+          final newChapterTitle = location['chapterTitle'] ?? '';
+          final newChapterHref = location['chapterHref'] ?? '';
+
+          if (_relocateThrottleTimer != null) {
+            _relocatePending = true;
+            return; // Skip expensive work, throttle timer will fire soon
+          }
+
+          _relocatePending = false;
+          _applyRelocate(location);
           saveReadingProgress();
+
+          // Throttle subsequent calls for 300ms (scroll mode can fire at 60fps)
+          _relocateThrottleTimer =
+              Timer(const Duration(milliseconds: 300), () {
+            _relocateThrottleTimer = null;
+            if (_relocatePending) {
+              _relocatePending = false;
+              saveReadingProgress();
+            }
+          });
           readingPageKey.currentState?.resetAwakeTimer();
         });
     controller.addJavaScriptHandler(
@@ -877,6 +908,33 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
         }
       },
     );
+    controller.addJavaScriptHandler(
+      handlerName: 'requestTextEdits',
+      callback: (args) async {
+        try {
+          // Use href from JS if available (section-specific), fallback to current chapterHref
+          final rawHref = (args.isNotEmpty && args[0] is Map)
+              ? ((args[0] as Map)['href'] as String?) ?? chapterHref
+              : chapterHref;
+          // Normalize: strip fragment to match saved edits
+          final href = rawHref.split('#').first;
+          if (href.isEmpty) return;
+
+          final edits = await textEditService.loadEdits(
+            widget.book.id,
+            href,
+          );
+          if (edits.isEmpty) return;
+
+          final jsSource = TextEditService.buildApplyEditsJsSource(edits);
+          if (jsSource.isNotEmpty) {
+            await controller.evaluateJavascript(source: jsSource);
+          }
+        } catch (e) {
+          AnxLog.warning('Failed to apply text edits: $e');
+        }
+      },
+    );
   }
 
   Future<void> onWebViewCreated(InAppWebViewController controller) async {
@@ -913,7 +971,7 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
       _accumulatedScrollDelta += event.scrollDelta.dy;
 
       _scrollDebounceTimer?.cancel();
-      _scrollDebounceTimer = Timer(const Duration(milliseconds: 80), () {
+      _scrollDebounceTimer = Timer(const Duration(milliseconds: 50), () {
         if (_accumulatedScrollDelta.abs() >= _scrollThreshold) {
           if (_accumulatedScrollDelta > 0) {
             nextPage();
@@ -961,22 +1019,36 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
 
   Future<void> saveReadingProgress() async {
     if (cfi == '' || widget.cfi != null) return;
-    Book book = widget.book;
-    book.lastReadPosition = cfi;
-    book.readingPercentage = percentage;
-    await bookDao.updateBook(book);
-    if (mounted) {
-      ref.read(bookListProvider.notifier).refresh();
-    }
+    // Debounce: only write to database every 3 seconds during active reading
+    _saveProgressTimer?.cancel();
+    _saveProgressTimer = Timer(const Duration(seconds: 3), () async {
+      Book book = widget.book;
+      book.lastReadPosition = cfi;
+      book.readingPercentage = percentage;
+      await bookDao.updateBook(book);
+      if (mounted) {
+        ref.read(bookListProvider.notifier).refresh();
+      }
+    });
   }
 
   @override
   void dispose() {
     _scrollDebounceTimer?.cancel();
+    _saveProgressTimer?.cancel();
+    _relocateThrottleTimer?.cancel();
     _animationController?.dispose();
-    saveReadingProgress();
+    // Flush pending progress save immediately
+    _saveProgress();
     removeOverlay();
     super.dispose();
+  }
+
+  void _saveProgress() {
+    if (cfi == '' || widget.cfi != null) return;
+    bookDao.updateBook(widget.book
+      ..lastReadPosition = cfi
+      ..readingPercentage = percentage);
   }
 
   InAppWebViewSettings initialSettings = InAppWebViewSettings(

@@ -6,6 +6,10 @@ enum AiPrompts {
   translate,
   fullTextTranslate,
   mindmap,
+  bookAnalysisChapter,
+  bookAnalysisBatchMerge,
+  bookAnalysisFinalSynthesis,
+  bookAnalysisFanfic,
 }
 
 extension AiPromptsJson on AiPrompts {
@@ -140,6 +144,238 @@ After the tool call, summarize the structure in 3 bullet sentences highlighting:
 1. Overall framing of the mind map
 2. Key branches or clusters
 3. Notable insights or tensions revealed
+        ''';
+
+      case AiPrompts.bookAnalysisChapter:
+        return '''
+You are a senior literary critic and text analyst. Perform an exhaustive deep analysis of the following chapter.
+
+[Book] {{book_title}}
+[Chapter] {{chapter_label}} ({{chapter_index}}/{{total_chapters}})
+
+[Chapter Text]
+{{chapter_content}}
+
+Analyze in the SAME LANGUAGE as the original text. Cover ALL of the following dimensions in detail:
+
+I. Plot Progression
+- Every event (main + subplot), in chronological order, with cause-and-effect chains
+- Suspense, foreshadowing, clues (new or echoing prior chapters)
+- Turning points and their narrative significance
+
+II. Character Analysis (for EVERY appearing character)
+- Physical/social description (quote key lines)
+- Personality traits (inferred from behavior, dialogue, inner thoughts)
+- Emotional arc within this chapter
+- Relationship dynamics with other characters (intimacy, power, emotion; note changes)
+- Motivations for actions in this chapter
+- Growth or decline
+
+III. Setting & World-Building
+- Time (era, season, time of day)
+- Physical space (layout, geography, environment)
+- Socio-cultural context (class, customs, institutions, economy)
+- Material details (objects, clothing, food, transport — era markers)
+- Atmosphere and mood techniques
+
+IV. Writing Style (FOCUS AREA)
+- Narrative perspective (1st/2nd/3rd, omniscient/limited/objective, shifts)
+- Pacing (fast/slow, which passages accelerate/decelerate, techniques used)
+- Sentence patterns (long/short/mixed ratio, special structures)
+- Vocabulary style (formal/colloquial/classical/dialect, preference: ornate/plain/cold/tender)
+- Rhetorical devices (metaphor, personification, parallelism, synecdoche, irony — with examples)
+- Dialogue style (proportion, naturalness, character-specific speech patterns)
+- Sensory description (visual/auditory/olfactory/tactile/gustatory emphasis)
+- Restraint and implication (deliberate omissions, unsaid meanings)
+
+V. Literary Techniques
+- Symbolism and metaphor (symbolic objects/images and meanings)
+- Foreshadowing and callbacks
+- Contrast and juxtaposition
+- Montage / temporal shifts
+- Reversals and surprises
+
+VI. Themes & Ideas
+- Themes addressed (fate, freedom, love, power, growth, death, etc.)
+- Author’s viewpoint or attitude conveyed
+- Philosophical/social/psychological deeper meanings
+
+VII. Representative Passages
+- Quote 2-3 passages (50-150 words each) that best represent the book’s writing style
+- Explain why each was chosen (what style features it demonstrates)
+
+Output in plain text with the seven headings above as section headers. Be exhaustive — err on the side of too much detail rather than too little.
+        ''';
+
+      case AiPrompts.bookAnalysisBatchMerge:
+        return '''
+You are a senior literary critic. Below are detailed chapter-by-chapter analyses of {{batch_count}} consecutive chapters from "{{book_title}}". Merge them into a single coherent cross-chapter analytical report.
+
+[Chapter Analyses]
+{{batch_summaries}}
+
+Merge with the SAME LANGUAGE as the original text. Ensure NO information is lost:
+
+I. Plot Thread Continuity
+- Chain chapter events into complete narrative arcs
+- Mark rising/falling action rhythm
+- Track subplot development and convergence with main plot
+- Track all suspense/foreshadowing status (resolved/unresolved/newly introduced)
+
+II. Character Evolution Tracking
+- For each character: arc across these chapters (what changed and how)
+- Relationship network evolution
+- Motivation shifts
+- Key decision points and consequences
+- Group character patterns
+
+III. World-Building Expansion
+- New world-building details revealed in these chapters
+- Social structure / power dynamics / cultural customs
+- Geography expansion (new locations)
+
+IV. Style Aggregation
+- Style changes across these chapters (early/mid/late differences)
+- Overall pacing trajectory
+- Recurring rhetorical patterns and language habits
+- Summary of the author’s most distinctive linguistic features
+
+V. Thematic Evolution
+- How themes deepen across these chapters
+- New sub-themes emerging
+- Expansion of symbol/metaphor systems
+
+Output as flowing text organized by the five dimensions above. Preserve specific details and examples — do not generalize. 1500-2000 words.
+        ''';
+
+      case AiPrompts.bookAnalysisFinalSynthesis:
+        return '''
+You are a top-tier literary critic specializing in panoramic deep analysis. Below are batch analysis reports and representative passage samples from "{{book_title}}" by {{book_author}}. Synthesize a comprehensive full-book analysis.
+
+[Batch Reports]
+{{batch_summaries}}
+
+[Representative Passages (chapter openings)]
+{{chapter_samples}}
+
+Output in the SAME LANGUAGE as the original text. Be exhaustive and evidence-based.
+
+═══════════════════════════════
+I. Overview
+═══════════════════════════════
+- Core essence in one sentence (≤30 words)
+- Genre positioning
+- Inferred writing background
+- Structural analysis (parts/volumes, linear/non-linear/multi-thread/circular)
+
+═══════════════════════════════
+II. Plot Architecture (Exhaustive)
+═══════════════════════════════
+- Main plot arc: setup → trigger → development → climax → resolution
+- Each subplot: start/end, characters involved, relationship to main plot
+- Foreshadowing system: plant location → payoff location → narrative effect
+- Suspense escalation structure
+- Narrative techniques: flashback, flash-forward, parallel narrative
+- Pacing control: tight vs. relaxed passages and alternation
+
+═══════════════════════════════
+III. Character Atlas (Exhaustive)
+═══════════════════════════════
+- For EACH major character (independent analysis):
+  · Role in story / complete character arc / personality dimensions (≥3) and contradictions
+  · Key decisions and psychological motivations / symbolic meaning / speech patterns
+- Minor characters: one-line positioning and narrative function
+- Relationship network: core chains / power structures / emotional entanglements / faction divisions
+
+═══════════════════════════════
+IV. World-Building & Setting
+═══════════════════════════════
+- Time-space setting
+- Social structure (class, power institutions, economy, culture, taboos)
+- Unique world-building (magic/tech/race systems for fantasy; historical context for realism)
+
+═══════════════════════════════
+V. Writing Style Deep Analysis (FOCUS)
+═══════════════════════════════
+- Narrative strategy (perspective choice and its effects, narrator reliability, narrative distance)
+- Language texture (overall style, sentence patterns, vocabulary level, unique expressions)
+- Rhetorical device repertoire (top 3-5 devices with examples)
+- Dialogue art (proportion, subtext, character differentiation)
+- Sensory & imagery system (preferred senses, recurring core images and symbolic meanings)
+- Rhythm & musicality (pacing waves, scene-switch rhythm, sonic patterns)
+
+═══════════════════════════════
+VI. Themes & Intellectual Depth
+═══════════════════════════════
+- Core themes (1-3) with specific manifestations
+- Sub-theme network
+- Author’s ideological stance, moral ambiguity, questions posed to reader
+
+═══════════════════════════════
+VII. Symbolism & Metaphor System
+═══════════════════════════════
+- Core symbols and meanings
+- Three-layer structure: literal → metaphorical → symbolic
+- Intertextuality (references to other works, myths, history)
+
+═══════════════════════════════
+VIII. Craft & Literary Value
+═══════════════════════════════
+- Narrative innovations
+- Uniqueness among同类 works
+- Literary influences and lineage
+
+═══════════════════════════════
+IX. Emotional Landscape
+═══════════════════════════════
+- Full-book emotional trajectory (opening to closing mood curve)
+- 3-5 most moving scenes (brief explanation)
+- Most shocking turning points
+- Aftertaste: core emotional experience left with the reader
+
+═══════════════════════════════
+X. One-Line Verdict
+═══════════════════════════════
+Summarize the book’s essence in one sentence (≤50 words).
+        ''';
+
+      case AiPrompts.bookAnalysisFanfic:
+        return '''
+You are a seasoned novelist skilled in fan fiction and continuation writing. Below is a deep analysis of "{{book_title}}" and the user’s story outline. Write a fan fiction that perfectly matches the original’s style.
+
+[Original Work Deep Analysis]
+{{analysis_json}}
+
+[User’s Story Outline]
+{{outline}}
+
+Requirements (in order of priority):
+
+1. STYLE CONSISTENCY (Highest Priority)
+- Strictly replicate: narrative perspective, sentence patterns, vocabulary style, rhetorical preferences
+- Each character’s speech must match the original (word choice, tone, catchphrases)
+
+2. CHARACTER CONSISTENCY
+- No personality deviation from original characterization
+- Maintain original relationship logic
+- If time has passed, psychological changes must be justified
+
+3. WORLD CONSISTENCY
+- No contradictions with original world-building
+- Maintain social context, cultural customs, rule systems
+
+4. NARRATIVE QUALITY
+- Complete story arc (setup → development → climax → resolution)
+- At least one emotional climax
+- Ending with aftertaste, not abrupt
+- 3000-5000 words
+
+5. DETAIL ECHOES
+- Appropriately reference or echo original classic scenes/dialogue
+- If original has mysteries, cleverly address them in fanfic
+- Maintain original symbol/metaphor systems
+
+Output the fan fiction text directly with no explanations. Include a title at the top.
         ''';
     }
   }

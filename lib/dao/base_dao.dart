@@ -142,4 +142,9 @@ abstract class BaseDao {
     final database = await _database;
     return database.transaction(action);
   }
+
+  Future<R> runTransaction<R>(Future<R> Function() action) async {
+    final database = await _database;
+    return database.transaction<R>((_) => action());
+  }
 }

@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:anx_reader/dao/book.dart';
 import 'package:anx_reader/dao/reading_time.dart';
+import 'package:anx_reader/page/book_analysis/book_analysis_page.dart';
 import 'package:anx_reader/enums/hint_key.dart';
 import 'package:anx_reader/enums/sync_direction.dart';
 import 'package:anx_reader/enums/sync_trigger.dart';
@@ -355,6 +356,30 @@ class _BookDetailState extends ConsumerState<BookDetail> {
                     });
                   }),
         ],
+      );
+    }
+
+    Widget buildBookAnalysisButton() {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+        child: SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.analytics_outlined),
+            label: Text(L10n.of(context).settingsAiBookAnalysis),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => BookAnalysisPage(
+                    book: widget.book,
+                    isFromFile: true,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       );
     }
 
@@ -822,6 +847,7 @@ class _BookDetailState extends ConsumerState<BookDetail> {
                                         constraints.maxWidth / 2 - 20),
                                     buildTagEditor(),
                                     buildEditButton(),
+                                    buildBookAnalysisButton(),
                                     const SizedBox(height: 5),
                                     buildBookStatistics(),
                                   ],
@@ -844,6 +870,7 @@ class _BookDetailState extends ConsumerState<BookDetail> {
                               buildBookBaseDetail(constraints.maxWidth),
                               buildTagEditor(),
                               buildEditButton(),
+                              buildBookAnalysisButton(),
                               const SizedBox(height: 5),
                               buildBookStatistics(),
                               const SizedBox(height: 15),

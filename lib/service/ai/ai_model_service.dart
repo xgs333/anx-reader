@@ -1,6 +1,29 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+/// Sanitize the base URL by removing known API endpoint segments.
+String _sanitizeBaseUrl(String raw) {
+  final url = raw.trim();
+  if (url.isEmpty) return url;
+
+  final uri = Uri.tryParse(url);
+  if (uri == null) return url;
+
+  const removable = {
+    'chat', 'messages', 'completions', 'responses', 'invoke', 'openai',
+  };
+
+  final segments = uri.pathSegments.toList(growable: true);
+  while (segments.isNotEmpty &&
+      removable.contains(segments.last.toLowerCase())) {
+    segments.removeLast();
+  }
+
+  final cleaned = uri.replace(pathSegments: segments);
+  final result = cleaned.toString();
+  return result.endsWith('/') ? result.substring(0, result.length - 1) : result;
+}
+
 /// Fetches the list of available model IDs from an OpenAI-compatible /models endpoint.
 ///
 /// Returns a sorted list of model ID strings on success, or throws an exception
@@ -10,7 +33,7 @@ Future<List<String>> fetchAiModels({
   required String apiKey,
   Duration timeout = const Duration(seconds: 10),
 }) async {
-  final baseUrl = url.trim();
+  final baseUrl = _sanitizeBaseUrl(url);
   final modelsUrl =
       baseUrl.endsWith('/') ? '${baseUrl}models' : '$baseUrl/models';
 
